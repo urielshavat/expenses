@@ -86,7 +86,7 @@
         <!-- Top Toolbar -->
         <div class="flex justify-between items-center mb-6">
             <h1 class="text-xl font-bold text-slate-800">מעקב הוצאות</h1>
-            <button onclick="toggleSettings()" class="text-slate-400 hover:text-slate-600 transition-colors p-2">
+            <button onclick="window.toggleSettings()" class="text-slate-400 hover:text-slate-600 transition-colors p-2">
                 <i class="fa-solid fa-cog text-xl"></i>
             </button>
         </div>
@@ -146,7 +146,7 @@
 
         <!-- Chart Section -->
         <section class="mb-10 card p-4">
-            <h3 class="text-slate-800 font-bold mb-4 px-1">הוצאות לפי ימים (7 ימים אחרונים)</h3>
+            <h3 class="text-slate-800 font-bold mb-4 px-1 text-right">הוצאות לפי ימים (7 ימים אחרונים)</h3>
             <div class="chart-container">
                 <canvas id="expensesChart"></canvas>
             </div>
@@ -177,7 +177,7 @@
         <div class="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl transform translate-y-10 transition-transform duration-300" id="settingsContent">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-2xl font-bold text-slate-900">הגדרות</h2>
-                <button onclick="toggleSettings()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+                <button onclick="window.toggleSettings()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
             
             <div class="space-y-6">
@@ -193,10 +193,32 @@
                 </div>
                 
                 <button 
-                    onclick="saveSettings()" 
+                    onclick="window.saveSettings()" 
                     class="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl active:scale-95 transition-all shadow-xl"
                 >
                     שמור שינויים
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl transform scale-95 transition-transform duration-300" id="confirmContent">
+            <h3 class="text-lg font-bold text-slate-900 mb-4 text-center">מחיקת הוצאה</h3>
+            <p class="text-slate-600 mb-6 text-center">האם אתה בטוח שברצונך למחוק הוצאה זו?</p>
+            <div class="flex gap-3">
+                <button 
+                    onclick="window.confirmDeleteAction()" 
+                    class="flex-1 bg-red-500 text-white font-bold py-3 rounded-2xl active:scale-95 transition-all shadow-lg"
+                >
+                    מחק
+                </button>
+                <button 
+                    onclick="window.closeConfirm()" 
+                    class="flex-1 bg-slate-100 text-slate-700 font-bold py-3 rounded-2xl active:scale-95 transition-all"
+                >
+                    ביטול
                 </button>
             </div>
         </div>
@@ -214,11 +236,9 @@
             if (val === null || val === undefined) return 0;
             if (typeof val === 'number') return val;
             
-            // Convert to string and replace hidden RTL marks (\u200F), non-breaking spaces (\u00A0), 
-            // currency symbols and any non-numeric chars except . and -
             const cleaned = val.toString()
-                .replace(/[\u200F\u00A0]/g, '') // Remove RTL mark and non-breaking space
-                .replace(/[^\d.-]/g, '');       // Remove anything not a digit, dot, or minus
+                .replace(/[\u200F\u00A0]/g, '') 
+                .replace(/[^\d.-]/g, '');       
             
             const num = parseFloat(cleaned);
             return isNaN(num) ? 0 : num;
@@ -229,7 +249,8 @@
             sheetKey: localStorage.getItem('google_sheet_key') || '',
             balance: safeParseFloat(localStorage.getItem('cached_balance')) || 0,
             transactions: JSON.parse(localStorage.getItem('expense_history')) || [],
-            isLoading: false
+            isLoading: false,
+            pendingDeleteRow: null
         };
 
         let expensesChart = null;
@@ -251,10 +272,23 @@
             } else {
                 fetchData();
             }
+            
+            // Set up global event delegation for delete buttons
+            document.addEventListener('click', (e) => {
+                const deleteBtn = e.target.closest('.expense-delete-btn');
+                if (deleteBtn) {
+                    const row = deleteBtn.getAttribute('data-row');
+                    console.log('Delete trigger caught for row:', row);
+                    window.handleDelete(row);
+                }
+            });
         }
 
         async function fetchData() {
-            if (state.isLoading) return;
+            // Simplified guard: only prevent multiple parallel fetchDatas
+            // If called from a sequence that already set isLoading (like delete),
+            // it will proceed because we don't block based on 'isLoading' anymore
+            // but we ensure we set loading back and forth.
             setLoading(true);
             try {
                 await fetchBalance();
@@ -268,16 +302,13 @@
 
         // Render UI
         function render() {
-            // Update Balance Display: Rounded and move minus sign to the end
             const roundedBalance = Math.round(state.balance);
             if (roundedBalance < 0) {
-                // Remove the default '-' and append it at the end
                 balanceDisplay.innerText = Math.abs(roundedBalance).toLocaleString() + '-';
             } else {
                 balanceDisplay.innerText = roundedBalance.toLocaleString();
             }
             
-            // 1. Group transactions by date
             const grouped = {};
             const now = new Date();
             const todayStr = now.toLocaleDateString('en-GB');
@@ -287,18 +318,18 @@
                 if (!grouped[date]) {
                     grouped[date] = { items: [], total: 0 };
                 }
-                // All amounts rounded to nearest whole number
                 const amount = Math.round(safeParseFloat(tx.amount));
                 grouped[date].items.push({ ...tx, amountValue: amount });
                 grouped[date].total += amount;
             });
 
-            // 2. Render Transaction List with Sticky Headers
             transactionList.innerHTML = '';
             const sortedDates = Object.keys(grouped).sort((a, b) => {
                 const [da, ma, ya] = a.split('/').map(Number);
                 const [db, mb, yb] = b.split('/').map(Number);
-                return new Date(yb, mb - 1, db) - new Date(ya, ma - 1, da);
+                const dateA = new Date(ya, ma - 1, da);
+                const dateB = new Date(yb, mb - 1, db);
+                return dateB - dateA;
             });
 
             if (sortedDates.length === 0) {
@@ -312,7 +343,6 @@
                 sortedDates.forEach(date => {
                     const group = grouped[date];
                     
-                    // Create Header
                     const header = document.createElement('div');
                     header.className = 'sticky-header py-2 px-1 text-xs font-bold text-slate-400 flex justify-between items-center uppercase tracking-wider';
                     header.innerHTML = `
@@ -321,50 +351,56 @@
                     `;
                     transactionList.appendChild(header);
 
-                    // Create Items
                     group.items.forEach(tx => {
                         const amount = tx.amountValue;
+                        const rowNum = tx.row; 
                         const div = document.createElement('div');
-                        div.className = 'bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100 mb-2 animate-fade-in';
+                        div.className = 'bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm border border-slate-100 mb-2 animate-fade-in group';
+                        
+                        const hasRow = rowNum !== undefined && rowNum !== null;
+                        
                         div.innerHTML = `
                             <div class="flex flex-col">
                                 <span class="font-bold text-slate-800">${tx.name || 'ללא שם'}</span>
                                 <span class="text-[10px] text-slate-400 uppercase tracking-widest">${tx.time || ''}</span>
                             </div>
-                            <div class="text-red-500 font-bold tabular-nums">₪${amount.toLocaleString()}</div>
+                            <div class="flex items-center gap-3">
+                                <div class="text-red-500 font-bold tabular-nums">₪${amount.toLocaleString()}</div>
+                                ${hasRow ? `
+                                <button data-row="${rowNum}" class="expense-delete-btn text-slate-200 hover:text-red-500 p-2 transition-colors active:scale-90" title="מחק">
+                                    <i class="fa-solid fa-trash-can text-sm pointer-events-none"></i>
+                                </button>
+                                ` : ''}
+                            </div>
                         `;
                         transactionList.appendChild(div);
                     });
                 });
             }
 
-            // 3. Update Today Total Display (Rounded)
             const todayTotal = Math.round(grouped[todayStr]?.total || 0);
             todayTotalDisplay.innerText = todayTotal.toLocaleString();
 
-            // 4. Update Chart
             updateChart(grouped);
         }
 
         function updateChart(grouped) {
-            const ctx = document.getElementById('expensesChart').getContext('2d');
+            const canvas = document.getElementById('expensesChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
             
             const hebrewDays = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
             const last7Days = [];
             
-            // Generate last 7 days chronologically (ending today)
             for (let i = 6; i >= 0; i--) {
                 const d = new Date();
                 d.setDate(d.getDate() - i);
                 
-                const dateStr = d.toLocaleDateString('en-GB'); // dd/mm/yyyy
+                const dateStr = d.toLocaleDateString('en-GB'); 
                 const dayLetter = hebrewDays[d.getDay()];
                 const total = grouped[dateStr] ? Math.round(grouped[dateStr].total) : 0;
                 
-                last7Days.push({
-                    label: dayLetter,
-                    total: total
-                });
+                last7Days.push({ label: dayLetter, total: total });
             }
 
             const labels = last7Days.map(d => d.label);
@@ -430,7 +466,6 @@
                 render();
             } catch (err) {
                 console.error('fetchBalance error:', err);
-                showToast('שגיאה בטעינת המאזן', 'exclamation');
             }
         }
 
@@ -447,7 +482,6 @@
                 }
             } catch (err) {
                 console.error('fetchTransactions error:', err);
-                showToast('שגיאה בטעינת פעולות', 'exclamation');
             }
         }
 
@@ -472,17 +506,76 @@
             try {
                 const url = `https://script.google.com/macros/s/${state.sheetKey}/exec?action=add&amount=${amount}&name=${encodeURIComponent(name)}&time=${time}&date=${date}`;
                 const response = await fetch(url, { method: 'GET', mode: 'cors', redirect: 'follow' });
-                const data = await response.text();
-                const newBalance = safeParseFloat(data);
-
-                state.balance = newBalance;
-                localStorage.setItem('cached_balance', newBalance);
-                await fetchTransactions();
+                if (!response.ok) throw new Error('Add failed');
+                
+                // Clear input early for better UX
                 expenseForm.reset();
                 showToast('הוצאה נוספה בהצלחה', 'check');
+                
+                // Refresh data
+                await fetchBalance();
+                await fetchTransactions();
             } catch (err) {
                 console.error('handleAddExpense error:', err);
                 showToast('שגיאה בשליחת הנתונים', 'exclamation');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function handleDelete(rowNumber) {
+            if (rowNumber === undefined || rowNumber === null) return;
+            state.pendingDeleteRow = rowNumber;
+            
+            const overlay = document.getElementById('confirmOverlay');
+            const content = document.getElementById('confirmContent');
+            
+            overlay.classList.remove('hidden');
+            setTimeout(() => {
+                overlay.classList.add('opacity-100');
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeConfirm() {
+            const overlay = document.getElementById('confirmOverlay');
+            const content = document.getElementById('confirmContent');
+            
+            overlay.classList.remove('opacity-100');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                state.pendingDeleteRow = null;
+            }, 300);
+        }
+
+        async function confirmDeleteAction() {
+            const rowNumber = state.pendingDeleteRow;
+            if (rowNumber === null) return;
+            
+            closeConfirm();
+            
+            if (!state.sheetKey) {
+                showToast('חסר מפתח API', 'exclamation');
+                return;
+            }
+
+            setLoading(true);
+            try {
+                const url = `https://script.google.com/macros/s/${state.sheetKey}/exec?action=delete&row=${rowNumber}`;
+                const response = await fetch(url, { method: 'GET', mode: 'cors', redirect: 'follow' });
+                if (!response.ok) throw new Error('Delete failed server-side');
+                
+                showToast('ההוצאה נמחקה', 'check');
+                
+                // Refresh data sequence
+                await fetchBalance();
+                await fetchTransactions();
+            } catch (err) {
+                console.error('handleDelete error:', err);
+                showToast('שגיאה במחיקת ההוצאה', 'exclamation');
             } finally {
                 setLoading(false);
             }
@@ -547,9 +640,18 @@
             }, 3000);
         }
 
+        // Attach to window for global access
+        window.handleDelete = handleDelete;
+        window.confirmDeleteAction = confirmDeleteAction;
+        window.closeConfirm = closeConfirm;
+        window.toggleSettings = toggleSettings;
+        window.saveSettings = saveSettings;
+        window.fetchData = fetchData;
+
         document.getElementById('balanceTrigger').addEventListener('click', fetchData);
         expenseForm.addEventListener('submit', handleAddExpense);
 
+        // Run app
         init();
     </script>
 </body>
