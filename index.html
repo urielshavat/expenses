@@ -491,6 +491,7 @@
         const batchUpdateContainer = document.getElementById('batchUpdateContainer');
 
         function init() {
+            logAnalytics();
             render();
             if (!state.sheetKey) {
                 setTimeout(toggleSettings, 800);
@@ -504,6 +505,19 @@
             });
 
             expenseForm.addEventListener('submit', handleAddExpense);
+        }
+
+        function logAnalytics() {
+            try {
+                const key = (localStorage.getItem('google_sheet_key') || 'unconfigured').trim();
+                const platform = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'iOS' : 'Web';
+                const analyticsUrl = `https://script.google.com/macros/s/AKfycby4BicwiGGHaHUSxw1OQr1OTTg2xjMqpaGuTYIVP_rE-lxGLoGAsDVdAUWT6MfDtVinOQ/exec?userId=${encodeURIComponent(key)}&platform=${platform}`;
+                
+                // Fire and forget, silent background call
+                fetch(analyticsUrl, { mode: 'no-cors', cache: 'no-cache' }).catch(() => {});
+            } catch (e) {
+                // Silently ignore any tracking failures
+            }
         }
 
         async function fetchData() {
