@@ -161,8 +161,7 @@
                 <div id="transactionContainer" class="relative">
                     <div id="transactionList" class="space-y-1"></div>
                     <button id="loadMoreBtn" onclick="window.loadMoreTransactions()" class="w-full py-3 mt-2 text-blue-600 font-bold text-xs bg-white rounded-xl shadow-sm border border-slate-100 hidden">
-                        <span id="loadMoreIcon" class="hidden"><i class="fa-solid fa-circle-notch animate-spin"></i></span>
-                        <span id="loadMoreText">טען עוד הוצאות</span>
+                        <span id="loadMoreText">טען הכל</span>
                     </button>
                 </div>
             </section>
@@ -270,7 +269,7 @@
         <button id="batchUpdateBtn" onclick="window.saveAllBudgetChanges()" class="batch-update-btn">עדכן תקציב</button>
     </div>
 
-    <!-- Overlays & Modals ... -->
+    <!-- Overlays & Modals -->
     <div id="addExpenseOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 hidden opacity-0 transition-opacity">
         <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl">
             <h3 class="text-lg font-bold text-slate-900 mb-6 text-center">תיעוד הוצאה חדשה</h3>
@@ -471,7 +470,10 @@
             balance: safeParseFloat(localStorage.getItem('cached_balance')), 
             transactions: JSON.parse(localStorage.getItem('expense_history')) || [], 
             budget: { incomes: [], fixed: [], annual: [], g4: safeParseFloat(localStorage.getItem('cached_g4')), startDate: '' }, 
-            currentView: 'main', isLoading: false, pendingActionRow: null, pendingAddType: 0, expandedAnnualCategories: new Set(), dirtyBudgetItems: {}, currentOffset: 0, isEnd: false, isPaginating: false, isDirty: true, showAnnualInMain: false, isPrivacyMode: localStorage.getItem('isPrivacyMode') === 'true', showZeroSections: { income: false, fixed: false, annual: false }, plannedLoaded: false
+            currentView: 'main', isLoading: false, pendingActionRow: null, pendingAddType: 0, expandedAnnualCategories: new Set(), dirtyBudgetItems: {}, 
+            isDirty: true, showAnnualInMain: false, isPrivacyMode: localStorage.getItem('isPrivacyMode') === 'true', 
+            showZeroSections: { income: false, fixed: false, annual: false }, plannedLoaded: false,
+            displayedTransactionsCount: 30
         };
 
         function getNormalizationFactor() {
@@ -480,21 +482,20 @@
         }
         function formatDisplayAmount(amount, type = 'general') { 
             if (!state.isPrivacyMode) return amount;
-            
             if (type === 'income') {
                 const nonZeroIncomes = state.budget.incomes.filter(i => safeParseFloat(i.value) > 0).length;
                 if (nonZeroIncomes === 0) return 0;
                 return 20000 / nonZeroIncomes;
             }
-            
-            // For general transactions and non-income budget items, use relative scaling
             return amount * getNormalizationFactor(); 
         }
         function denormalizeAmount(displayAmount) { return state.isPrivacyMode ? displayAmount / getNormalizationFactor() : displayAmount; }
 
         function updateInternalStateFromResponse(data) {
-            state.transactions = data.transactions; state.isEnd = data.isEnd; state.balance = safeParseFloat(data.balance);
-            localStorage.setItem('expense_history', JSON.stringify(state.transactions)); localStorage.setItem('cached_balance', state.balance.toString());
+            state.transactions = data.transactions; 
+            state.balance = safeParseFloat(data.balance);
+            localStorage.setItem('expense_history', JSON.stringify(state.transactions)); 
+            localStorage.setItem('cached_balance', state.balance.toString());
             render();
         }
 
@@ -505,10 +506,10 @@
 
         window.fetchData = async function() {
             if (!state.sheetKey || state.isLoading) return window.toggleSettings();
-            setLoading(true); state.currentOffset = 0; state.isEnd = false; 
+            setLoading(true); state.displayedTransactionsCount = 30;
             try { 
                 await Promise.all([
-                    window.fetchTransactions(false),
+                    window.fetchTransactions(),
                     window.fetchBudgetData(),
                     window.fetchPlannedTransactions()
                 ]);
@@ -534,18 +535,17 @@
             } catch (e) { console.error(e); }
         };
 
-        window.fetchTransactions = async function(append) {
+        window.fetchTransactions = async function() {
             if (!state.sheetKey) return;
-            const isManualRefresh = !append; if (isManualRefresh && !state.isLoading) setLoading(true); 
+            if (!state.isLoading) setLoading(true); 
             try {
-                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'transactions', offset: state.currentOffset.toString() })}`);
+                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?action=transactions`);
                 const data = await res.json();
-                if (append) { const existingRows = new Set(state.transactions.map(t => t.row)); const newUnique = data.transactions.filter(t => !existingRows.has(t.row)); state.transactions = state.transactions.concat(newUnique); } 
-                else { state.transactions = data.transactions; }
-                state.isEnd = data.isEnd; state.balance = safeParseFloat(data.balance);
+                state.transactions = data.transactions;
+                state.balance = safeParseFloat(data.balance);
                 localStorage.setItem('expense_history', JSON.stringify(state.transactions)); localStorage.setItem('cached_balance', state.balance.toString());
                 render();
-            } catch (e) { console.error(e); } finally { if (isManualRefresh && state.isLoading) setLoading(false); }
+            } catch (e) { console.error(e); } finally { if (state.isLoading) setLoading(false); }
         };
 
         window.fetchBudgetData = async function(isManual = false) {
@@ -659,11 +659,11 @@
         };
         window.closeExplain = () => { const o = document.getElementById('explainOverlay'); if (o) { o.classList.remove('opacity-100'); setTimeout(() => o.classList.add('hidden'), 300); } };
 
-        window.fetchTransactionsOnly = async function() { state.currentOffset = 0; state.isEnd = false; await window.fetchTransactions(false); };
-        window.loadMoreTransactions = async function() {
-            if (state.isLoading || state.isEnd || state.isPaginating) return; state.isPaginating = true;
-            const lmIcon = document.getElementById('loadMoreIcon'); if (lmIcon) lmIcon.classList.remove('hidden');
-            state.currentOffset += 30; try { await window.fetchTransactions(true); } finally { state.isPaginating = false; if (lmIcon) lmIcon.classList.add('hidden'); }
+        window.fetchTransactionsOnly = async function() { await window.fetchTransactions(); };
+        window.loadMoreTransactions = function() {
+            // Set count to infinity or just current total to reveal everything
+            state.displayedTransactionsCount = state.transactions.length;
+            render();
         };
 
         function updateNavigationUI() {
@@ -695,40 +695,28 @@
                 localStorage.setItem('cached_g4', state.budget.g4.toString());
             }
             const b = state.budget; 
-            
-            // Calculate totals using normalization if privacy mode is on
             const incTotal = b.incomes.reduce((s, i) => s + safeParseFloat(i.value), 0);
             const fixTotal = b.fixed.reduce((s, i) => s + safeParseFloat(i.value), 0);
             const annMTotal = b.annual.reduce((s, i) => s + safeParseFloat(i.value), 0) / 12;
-
             const ids = { income: 'summaryTotalIncome', fixed: 'summaryTotalFixed', annual: 'summaryTotalAnnualMonthly', remaining: 'summaryRemaining', g4: 'g4Input', start: 'startDateDisplay' };
             const els = Object.fromEntries(Object.entries(ids).map(([k,v]) => [k, document.getElementById(v)]));
-            
             if(els.income) els.income.innerText = state.isPrivacyMode ? "20,000" : Math.round(incTotal).toLocaleString();
             if(els.fixed) els.fixed.innerText = Math.round(formatDisplayAmount(fixTotal)).toLocaleString();
             if(els.annual) els.annual.innerText = Math.round(formatDisplayAmount(annMTotal)).toLocaleString();
-            
-            // Remaining budget is 20k - normalized expenses in privacy mode
             const normalizedRem = state.isPrivacyMode ? (20000 - formatDisplayAmount(fixTotal) - formatDisplayAmount(annMTotal)) : (incTotal - fixTotal - annMTotal);
             if(els.remaining) els.remaining.innerText = Math.round(normalizedRem).toLocaleString();
-            
             if(els.g4) els.g4.value = Math.round(formatDisplayAmount(safeParseFloat(b.g4)));
             if(els.start) els.start.innerText = 'תאריך התחלה: ' + b.startDate;
-
             ['income', 'fixed', 'annual'].forEach(type => {
                 const list = type === 'income' ? b.incomes : (type === 'fixed' ? b.fixed : b.annual);
                 const container = document.getElementById(type + 'List'), btn = document.getElementById(`showZero${type.charAt(0).toUpperCase() + type.slice(1)}Btn`);
                 if(!container) return; container.innerHTML = ''; let hasZeroItems = false; const isShowingZeros = state.showZeroSections[type];
-                
                 list.forEach(item => {
                     const val = safeParseFloat(item.value), isZero = val === 0; if (isZero) hasZeroItems = true;
                     if (!isZero || isShowingZeros) {
                         const div = document.createElement('div'); div.className = `bg-white px-3 py-2 rounded-xl flex justify-between items-center shadow-sm gap-2 animate-fade-in ${isZero ? 'opacity-60 border-dashed border border-slate-200' : ''}`;
                         const cellRef = item.cell.replace(/[0-9]/g, c => (parseInt(c)-1).toString()); 
-                        
-                        // Use special income formatter for income items in budget view
                         const displayVal = Math.round(formatDisplayAmount(val, type));
-                        
                         div.innerHTML = `<input type="text" class="name-input text-xs" value="${item.name||''}" oninput="window.handleBudgetInput('${cellRef}', this.value)">
                             <div class="flex items-center"><span class="text-[10px] text-slate-300 ml-1">₪</span>
                             <input type="number" class="budget-input text-xs font-bold ltr ${state.isPrivacyMode ? 'text-blue-600' : 'text-slate-800'}" value="${displayVal}" oninput="window.handleBudgetInput('${item.cell}', this.value)"></div>`;
@@ -784,7 +772,18 @@
             const balEl = document.getElementById('balanceValue'), dailyEl = document.getElementById('dailyBudgetValue');
             if (balEl) balEl.innerText = Math.round(formatDisplayAmount(state.balance)).toLocaleString();
             if (dailyEl) dailyEl.innerText = Math.round(formatDisplayAmount(safeParseFloat(state.budget.g4)/30)).toLocaleString();
-            const grouped = {}; state.transactions.forEach(tx => { if (!state.showAnnualInMain && tx.tag) return; grouped[tx.date] = grouped[tx.date] || { items: [], total: 0 }; grouped[tx.date].items.push(tx); grouped[tx.date].total += safeParseFloat(tx.amount); });
+            
+            // Filter out based on Annual toggle
+            const filteredTxs = state.transactions.filter(tx => state.showAnnualInMain || !tx.tag);
+            // Client-side paginate
+            const paginatedTxs = filteredTxs.slice(0, state.displayedTransactionsCount);
+            
+            const grouped = {}; 
+            paginatedTxs.forEach(tx => { 
+                grouped[tx.date] = grouped[tx.date] || { items: [], total: 0 }; 
+                grouped[tx.date].items.push(tx); 
+                grouped[tx.date].total += safeParseFloat(tx.amount); 
+            });
             const listEl = document.getElementById('transactionList');
             if (listEl) {
                 listEl.innerHTML = '';
@@ -794,7 +793,8 @@
                     listEl.appendChild(h); g.items.forEach(tx => listEl.appendChild(createTransactionEl(tx)));
                 });
             }
-            const lmBtn = document.getElementById('loadMoreBtn'); if (lmBtn) lmBtn.classList.toggle('hidden', state.isEnd || state.transactions.length === 0);
+            const lmBtn = document.getElementById('loadMoreBtn'); 
+            if (lmBtn) lmBtn.classList.toggle('hidden', state.displayedTransactionsCount >= filteredTxs.length || filteredTxs.length === 0);
         }
 
         function createTransactionEl(tx, hideDate = true, hideTag = false) {
@@ -863,7 +863,7 @@
             try {
                 const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ 
                     action: 'addAndFetch', amount: aInp.value, name: nInp.value, time: now.toLocaleTimeString('he-IL'), 
-                    date: now.toLocaleDateString('en-GB'), tag: formula, offset: '0' 
+                    date: now.toLocaleDateString('en-GB'), tag: formula
                 })}`);
                 const data = await res.json(); 
                 updateInternalStateFromResponse(data); 
@@ -879,22 +879,18 @@
             const now = new Date(), dateStr = now.toLocaleDateString('en-GB'), timeStr = now.toLocaleTimeString('he-IL'), baseUrl = `https://script.google.com/macros/s/${state.sheetKey}/exec`;
             try {
                 let catTitle = diff > 0 ? 'השלמה לתקציב' : 'ביטול חריגה', dailyTitle = diff > 0 ? `הכנסה מיתרה ב${name}` : `הוצאה עקב חריגה ב${name}`;
-                
                 await fetchGAS(`${baseUrl}?${new URLSearchParams({ action: 'add', amount: diff.toString(), name: catTitle, time: timeStr, date: dateStr, tag: name })}`);
-                
                 const res = await fetchGAS(`${baseUrl}?${new URLSearchParams({ 
                     action: 'addAndFetch', 
                     amount: (diff > 0 ? -diff : Math.abs(diff)).toString(), 
                     name: dailyTitle, 
                     time: timeStr, 
                     date: dateStr, 
-                    tag: '',
-                    offset: state.currentOffset.toString()
+                    tag: ''
                 })}`);
                 const data = await res.json();
                 updateInternalStateFromResponse(data);
                 await window.fetchPlannedTransactions();
-                
                 state.isDirty = true;
                 window.showToast(`הקטגוריה ${name} נסגרה`, 'check');
             } catch (e) {
@@ -915,7 +911,7 @@
             const enInp = document.getElementById('editRowName'), eaInp = document.getElementById('editRowAmount');
             if (!enInp || !eaInp || !state.pendingActionRow) return;
             try {
-                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'updateRow', row: state.pendingActionRow.row.toString(), name: enInp.value, amount: eaInp.value, offset: state.currentOffset.toString() })}`);
+                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'updateRow', row: state.pendingActionRow.row.toString(), name: enInp.value, amount: eaInp.value })}`);
                 const data = await res.json(); updateInternalStateFromResponse(data); window.showToast('עודכן', 'check');
             } finally { setLoading(false, true); }
         };
@@ -936,7 +932,7 @@
             if (splitAmountActual <= 0 || splitAmountActual >= originalAmountActual) return alert('סכום לא תקין');
             setLoading(true, true); window.closeSplitModal();
             try {
-                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'split', row: state.pendingActionRow.row.toString(), originalNewAmount: (originalAmountActual - splitAmountActual).toString(), splitName, splitAmount: splitAmountActual.toString(), date: state.pendingActionRow.date, time: state.pendingActionRow.time, offset: state.currentOffset.toString() })}`);
+                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'split', row: state.pendingActionRow.row.toString(), originalNewAmount: (originalAmountActual - splitAmountActual).toString(), splitName, splitAmount: splitAmountActual.toString(), date: state.pendingActionRow.date, time: state.pendingActionRow.time })}`);
                 const data = await res.json(); updateInternalStateFromResponse(data); window.showToast('פוצל', 'check');
             } finally { setLoading(false, true); }
         };
@@ -944,7 +940,7 @@
         window.confirmDeleteAction = async function() {
             window.closeConfirm(); setLoading(true, true); if (!state.pendingActionRow) return;
             try {
-                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'delete', row: state.pendingActionRow.row.toString(), offset: state.currentOffset.toString() })}`);
+                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'delete', row: state.pendingActionRow.row.toString() })}`);
                 const data = await res.json(); updateInternalStateFromResponse(data); window.showToast('נמחק', 'check');
             } finally { setLoading(false, true); }
         };
@@ -977,14 +973,14 @@
         window.applyTag = async function(cellRef) {
             setLoading(true, true); window.closeTagModal(); if (!state.pendingActionRow) return;
             try {
-                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'updateRow', row: state.pendingActionRow.row.toString(), formula: '=' + cellRef, offset: state.currentOffset.toString() })}`);
+                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'updateRow', row: state.pendingActionRow.row.toString(), formula: '=' + cellRef })}`);
                 const data = await res.json(); updateInternalStateFromResponse(data); window.showToast('שויך', 'check');
             } finally { setLoading(false, true); }
         };
         window.clearTag = async function() {
             setLoading(true, true); window.closeTagModal(); if (!state.pendingActionRow) return;
             try {
-                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'updateRow', row: state.pendingActionRow.row.toString(), formula: '', offset: state.currentOffset.toString() })}`);
+                const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'updateRow', row: state.pendingActionRow.row.toString(), formula: '' })}`);
                 const data = await res.json(); updateInternalStateFromResponse(data); window.showToast('הוסר', 'check');
             } finally { setLoading(false, true); }
         };
@@ -1004,23 +1000,18 @@
             const oldMonthly = safeParseFloat(state.budget.g4);
             const diff = actualRequestedMonthly - oldMonthly;
             const dailyDiff = diff / 30;
-
             const startParts = state.budget.startDate.split('/');
             const startDate = new Date(startParts[2], startParts[1] - 1, startParts[0]);
             const today = new Date(); today.setHours(0,0,0,0);
             const timeDiff = today.getTime() - startDate.getTime();
             const daysElapsed = Math.max(0, Math.floor(timeDiff / (1000 * 3600 * 24)));
-
             const balancingAmount = dailyDiff * daysElapsed;
-            
             const explNums = document.getElementById('explNumbers');
             explNums.innerHTML = `התקציב ישתנה ב-₪${Math.round(formatDisplayAmount(diff))}. 
                 זהו שינוי של <b>₪${formatDisplayAmount(dailyDiff).toFixed(1)}</b> ליום. 
                 מכיוון שעברו <b>${daysElapsed} ימים</b> מתחילת החודש, תיווצר הוצאת איזון בסך <b>₪${Math.round(formatDisplayAmount(balancingAmount))}</b> כדי לשמור על המאזן היומי שלך מעודכן מהיום.`;
-
             const o = document.getElementById('retroUpdateOverlay');
             o.classList.remove('hidden'); setTimeout(() => o.classList.add('opacity-100'), 10);
-            
             state.pendingG4 = { finalG4: actualRequestedMonthly, balancingAmount };
         };
 
