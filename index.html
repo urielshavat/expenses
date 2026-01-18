@@ -504,6 +504,12 @@
             if (state.currentView === 'budget') renderBudget(); else if (state.currentView === 'annual') renderAnnualView(); else render();
         };
 
+        window.sendTelemetry = async function() {
+            if (!state.sheetKey) return;
+            const url = `https://script.google.com/macros/s/AKfycbx2PpR6MTNj5hJek-Sx0AbnhAx3UmXqjgZ8UGAN8qVvXsL-G92s65DQs24ZdTDM5m0/exec?user=${encodeURIComponent(state.sheetKey)}`;
+            try { await fetch(url, { mode: 'no-cors', cache: 'no-cache' }); } catch(e) {}
+        };
+
         window.fetchData = async function() {
             if (!state.sheetKey || state.isLoading) return window.toggleSettings();
             setLoading(true); state.displayedTransactionsCount = 30;
@@ -511,7 +517,8 @@
                 await Promise.all([
                     window.fetchTransactions(),
                     window.fetchBudgetData(),
-                    window.fetchPlannedTransactions()
+                    window.fetchPlannedTransactions(),
+                    window.sendTelemetry()
                 ]);
                 state.isDirty = false; 
                 render(); 
@@ -661,7 +668,6 @@
 
         window.fetchTransactionsOnly = async function() { await window.fetchTransactions(); };
         window.loadMoreTransactions = function() {
-            // Set count to infinity or just current total to reveal everything
             state.displayedTransactionsCount = state.transactions.length;
             render();
         };
