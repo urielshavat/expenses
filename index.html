@@ -15,7 +15,22 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700&display=swap');
-        body { font-family: 'Assistant', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; position: relative; min-height: 100vh; overflow-x: hidden; }
+        body { font-family: 'Assistant', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; position: relative; min-height: 100vh; overflow-x: hidden; transition: font-size 0.2s; }
+        
+        /* Accessibility: Large Text Mode Overrides */
+        body.large-text { font-size: 1.1rem; }
+        body.large-text .text-\[8px\] { font-size: 11px !important; }
+        body.large-text .text-\[9px\] { font-size: 12px !important; }
+        body.large-text .text-\[10px\] { font-size: 13px !important; }
+        body.large-text .text-xs { font-size: 0.95rem !important; }
+        body.large-text .text-sm { font-size: 1.05rem !important; }
+        body.large-text .text-lg { font-size: 1.25rem !important; }
+        body.large-text .text-xl { font-size: 1.4rem !important; }
+        body.large-text .text-4xl { font-size: 3rem !important; }
+        body.large-text .nav-text { font-size: 12px !important; }
+        body.large-text .btn-sync { font-size: 0.85rem !important; }
+        body.large-text .budget-input { width: 85px; }
+
         .card { background: #ffffff; border-radius: 1rem; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1); }
         .input-field { border: 1px solid #e2e8f0; background-color: #f9fafb; transition: all 0.2s; }
         .input-field:focus { border-color: #3b82f6; background-color: #ffffff; outline: none; }
@@ -348,10 +363,17 @@
                     <input type="text" id="sheetKeyInput" placeholder="Mck-LpZ123..." class="input-field w-full px-4 py-3 rounded-xl font-mono text-sm">
                 </div>
                 <div class="pt-4 border-t border-slate-100">
-                    <div class="flex justify-between items-center mb-1">
+                    <div class="flex justify-between items-center mb-4">
                         <span class="font-bold text-slate-700 text-sm">מצב תצוגה מוגן (Privacy)</span>
                         <label class="toggle-switch">
                             <input type="checkbox" id="privacyToggle" onchange="window.togglePrivacyMode()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-slate-700 text-sm">מצב גופן מוגדל</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="fontScaleToggle" onchange="window.toggleLargeText()">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -471,7 +493,9 @@
             transactions: JSON.parse(localStorage.getItem('expense_history')) || [], 
             budget: { incomes: [], fixed: [], annual: [], g4: safeParseFloat(localStorage.getItem('cached_g4')), startDate: '' }, 
             currentView: 'main', isLoading: false, pendingActionRow: null, pendingAddType: 0, expandedAnnualCategories: new Set(), dirtyBudgetItems: {}, 
-            isDirty: true, showAnnualInMain: false, isPrivacyMode: localStorage.getItem('isPrivacyMode') === 'true', 
+            isDirty: true, showAnnualInMain: false, 
+            isPrivacyMode: localStorage.getItem('isPrivacyMode') === 'true', 
+            isLargeText: localStorage.getItem('isLargeText') === 'true',
             showZeroSections: { income: false, fixed: false, annual: false }, plannedLoaded: false,
             displayedTransactionsCount: 30
         };
@@ -502,6 +526,14 @@
         window.togglePrivacyMode = function() {
             state.isPrivacyMode = !state.isPrivacyMode; localStorage.setItem('isPrivacyMode', state.isPrivacyMode);
             if (state.currentView === 'budget') renderBudget(); else if (state.currentView === 'annual') renderAnnualView(); else render();
+        };
+
+        window.toggleLargeText = function() {
+            state.isLargeText = !state.isLargeText; 
+            localStorage.setItem('isLargeText', state.isLargeText);
+            document.body.classList.toggle('large-text', state.isLargeText);
+            // After changing font size, some rendering might need nudge
+            if (state.currentView === 'budget') renderBudget();
         };
 
         window.sendTelemetry = async function() {
@@ -585,6 +617,7 @@
             if (o.classList.contains('hidden')) { 
                 const skInp = document.getElementById('sheetKeyInput'); if (skInp) skInp.value = state.sheetKey; 
                 const pt = document.getElementById('privacyToggle'); if (pt) pt.checked = state.isPrivacyMode;
+                const fst = document.getElementById('fontScaleToggle'); if (fst) fst.checked = state.isLargeText;
                 o.classList.remove('hidden'); setTimeout(() => o.classList.add('opacity-100'), 10); 
             } else { o.classList.remove('opacity-100'); setTimeout(() => o.classList.add('hidden'), 300); } 
         };
@@ -1070,7 +1103,11 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', () => { window.fetchData(); });
+        document.addEventListener('DOMContentLoaded', () => { 
+            // Initialize Font Mode
+            if (state.isLargeText) document.body.classList.add('large-text');
+            window.fetchData(); 
+        });
         render();
     </script>
 </body>
