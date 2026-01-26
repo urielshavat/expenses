@@ -1104,6 +1104,15 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => { 
+            // Check URL for ID
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlId = urlParams.get('id');
+            if (urlId) {
+                const cleanId = sanitizeScriptId(urlId);
+                state.sheetKey = cleanId;
+                localStorage.setItem('google_sheet_key', cleanId);
+            }
+
             // Initialize Font Mode
             if (state.isLargeText) document.body.classList.add('large-text');
             window.fetchData(); 
