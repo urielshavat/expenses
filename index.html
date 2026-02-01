@@ -635,10 +635,18 @@
         };
 
         window.toggleShowAnnualMain = function() {
+            // Remove loading state if stuck (defensive)
+            document.getElementById('appRoot').classList.remove('loading-disabled');
+            
             state.showAnnualInMain = !state.showAnnualInMain;
             const btn = document.getElementById('toggleAnnualBtn');
-            if (btn) { btn.classList.toggle('active', state.showAnnualInMain); btn.innerText = state.showAnnualInMain ? 'הסתר הוצאות שנתיות' : 'הצג הוצאות שנתיות'; }
-            render();
+            if (btn) { 
+                btn.classList.toggle('active', state.showAnnualInMain); 
+                btn.innerText = state.showAnnualInMain ? 'הסתר הוצאות שנתיות' : 'הצג הוצאות שנתיות'; 
+                btn.blur();
+            }
+            // Defer render to allow UI event loop to clear tap highlights
+            setTimeout(render, 10);
         };
 
         window.fetchAnnualData = async function(force = false) {
