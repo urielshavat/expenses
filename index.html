@@ -838,12 +838,12 @@
 
         function createTransactionEl(tx, hideDate = true, hideTag = false) {
             const d = document.createElement('div'); d.className = 'bg-white compact-tx rounded-xl shadow-sm animate-fade-in';
-            const escapedName = tx.name.replace(/'/g, "\\'"); const displayAmt = Math.round(formatDisplayAmount(safeParseFloat(tx.amount)));
+            const displayAmt = Math.round(formatDisplayAmount(safeParseFloat(tx.amount)));
             d.innerHTML = `
                 <div class="tx-actions-panel">
-                    <button onclick="window.initEditRowByData(${tx.row}, '${escapedName}', ${tx.amount})" class="action-btn btn-edit"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="window.initEditRow(${tx.row})" class="action-btn btn-edit"><i class="fa-solid fa-pen"></i></button>
                     <button onclick="window.initTagModalByRow(${tx.row})" class="action-btn btn-tag"><i class="fa-solid fa-tag"></i></button>
-                    <button onclick="window.initSplitRow(${tx.row}, '${escapedName}', ${tx.amount}, '${tx.date}', '${tx.time}')" class="action-btn btn-split"><i class="fa-solid fa-scissors"></i></button>
+                    <button onclick="window.initSplitRow(${tx.row})" class="action-btn btn-split"><i class="fa-solid fa-scissors"></i></button>
                     <button onclick="window.handleDeleteByRow(${tx.row})" class="action-btn btn-delete"><i class="fa-solid fa-trash"></i></button>
                     <button onclick="window.closeRowActions(event)" class="action-btn btn-close-actions"><i class="fa-solid fa-xmark"></i></button>
                 </div>
@@ -938,10 +938,14 @@
             } finally { setLoading(false, true); }
         };
 
-        window.initEditRowByData = (row, name, amount) => {
+        window.initEditRow = (row) => {
+            const tx = state.transactions.find(t => t.row === row);
+            if (!tx) return;
+            const { name, amount } = tx;
+
             state.pendingActionRow = { row, name, amount };
             const enInp = document.getElementById('editRowName'), eaInp = document.getElementById('editRowAmount');
-            if (enInp && eaInp) { enInp.value = name; eaInp.value = amount.toString(); }
+            if (enInp && eaInp) { enInp.value = name; eaInp.value = safeParseFloat(amount).toString(); }
             const o = document.getElementById('editRowOverlay'); if (o) { o.classList.remove('hidden'); setTimeout(() => o.classList.add('opacity-100'), 10); }
         };
 
@@ -955,9 +959,13 @@
             } finally { setLoading(false, true); }
         };
 
-        window.initSplitRow = (row, name, amount, date, time) => {
+        window.initSplitRow = (row) => {
+            const tx = state.transactions.find(t => t.row === row);
+            if (!tx) return;
+            const { name, amount, date, time } = tx;
+
             state.pendingActionRow = { row, name, amount, date, time };
-            const origEl = document.getElementById('splitOriginalAmount'); if (origEl) origEl.innerText = formatDisplayAmount(amount).toLocaleString();
+            const origEl = document.getElementById('splitOriginalAmount'); if (origEl) origEl.innerText = formatDisplayAmount(safeParseFloat(amount)).toLocaleString();
             const sInp = document.getElementById('splitValueInput'), nInp = document.getElementById('splitNameInput');
             if (sInp) sInp.value = ''; if (nInp) nInp.value = '';
             const o = document.getElementById('splitRowOverlay'); if (o) { o.classList.remove('hidden'); setTimeout(() => o.classList.add('opacity-100'), 10); }
