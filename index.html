@@ -214,7 +214,7 @@
                         <p class="text-sm font-bold text-slate-800">₪ <span id="summaryTotalFixed" class="ltr-num">0</span></p>
                     </div>
                     <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                        <p class="text-[9px] text-slate-400 mb-0.5 font-bold">הוצאות מתכוננות (חודשי)</p>
+                        <p class="text-[9px] text-slate-400 mb-0.5 font-bold">הוצאות מתוכננות (חודשי)</p>
                         <p class="text-sm font-bold text-slate-800">₪ <span id="summaryTotalAnnualMonthly" class="ltr-num">0</span></p>
                     </div>
                     <div class="bg-blue-50 p-2 rounded-xl border border-blue-100">
@@ -248,7 +248,7 @@
             </div>
             <div class="mb-8 pb-16">
                 <div class="flex justify-between items-center py-2">
-                    <h3 class="text-slate-800 font-bold text-xs flex items-center gap-1.5"><i class="fa-solid fa-calendar text-amber-500"></i>הוצאות מתכוננות</h3>
+                    <h3 class="text-slate-800 font-bold text-xs flex items-center gap-1.5"><i class="fa-solid fa-calendar text-amber-500"></i>הוצאות מתוכננות</h3>
                     <button onclick="window.initNewCategory(4)" class="btn-add-cat"><i class="fa-solid fa-plus"></i></button>
                 </div>
                 <div id="annualList" class="space-y-1.5"></div>
@@ -385,7 +385,7 @@
 
     <div id="tagOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 hidden opacity-0 transition-opacity">
         <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl max-h-[80vh] flex flex-col">
-            <h3 class="text-lg font-bold text-slate-900 mb-4 text-center">שיוך לקטגוריה מתכוננות</h3>
+            <h3 class="text-lg font-bold text-slate-900 mb-4 text-center">שיוך לקטגוריה מתוכננות</h3>
             <div id="categoryList" class="space-y-2 overflow-y-auto pr-1 flex-1"></div>
             <div class="flex gap-2 pt-4">
                 <button id="clearTagBtn" onclick="window.clearTag()" class="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold">ללא שיוך</button>
@@ -642,7 +642,7 @@
             const btn = document.getElementById('toggleAnnualBtn');
             if (btn) { 
                 btn.classList.toggle('active', state.showAnnualInMain); 
-                btn.innerText = state.showAnnualInMain ? 'הסתר הוצאות מתכוננות' : 'הצג הוצאות מתכוננות'; 
+                btn.innerText = state.showAnnualInMain ? 'הסתר הוצאות מתוכננות' : 'הצג הוצאות מתוכננות'; 
                 btn.blur();
             }
             // Defer render to allow UI event loop to clear tap highlights
@@ -689,7 +689,7 @@
             const { monthsPassed, monthlySetAside, totalAccruedBudget, actualSpent, reserve } = details;
             content.innerHTML = `
                 <div class="space-y-4">
-                    <p>השריון מייצג את החלק היחסי מהתקציב של ההוצאות המתכוננות שהיה אמור להיחסך עד היום.</p>
+                    <p>השריון מייצג את החלק היחסי מהתקציב של ההוצאות המתוכננות שהיה אמור להיחסך עד היום.</p>
                     <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2 text-xs">
                         <div class="flex justify-between"><span>חודשים שחלפו:</span> <span class="font-bold">${monthsPassed}</span></div>
                         <div class="flex justify-between"><span>הפרשה חודשית (תקציב/12):</span> <span class="font-bold">₪${Math.round(formatDisplayAmount(monthlySetAside)).toLocaleString()}</span></div>
@@ -718,7 +718,7 @@
             if (mv) mv.classList.toggle('hidden', state.currentView !== 'main');
             if (bv) bv.classList.toggle('hidden', state.currentView !== 'budget');
             if (av) av.classList.toggle('hidden', state.currentView !== 'annual');
-            const pt = document.getElementById('pageTitle'); const titles = { main: 'הוצאות שוטפות', budget: 'ניהול תקציב', annual: 'הוצאות מתכוננות' };
+            const pt = document.getElementById('pageTitle'); const titles = { main: 'הוצאות שוטפות', budget: 'ניהול תקציב', annual: 'הוצאות מתוכננות' };
             if (pt) pt.innerText = titles[state.currentView];
             
             const mainSyncBtn = document.getElementById('mainSyncBtn');
@@ -881,7 +881,7 @@
                 else { badgeEl.innerText = 'שמור'; badgeEl.className = 'text-[8px] font-bold px-1.5 py-0.5 rounded uppercase bg-blue-100 text-blue-600'; reserveSection.style.borderColor = '#e2e8f0'; }
             } else if (reserveSection) reserveSection.classList.add('hidden');
             const activeCats = state.budget.annual.filter(c => safeParseFloat(c.value) > 0);
-            if(activeCats.length === 0) { container.innerHTML = '<div class="text-center py-10 text-slate-300 font-bold text-xs">לא הוגדרו קטגוריות מתכוננות</div>'; return; }
+            if(activeCats.length === 0) { container.innerHTML = '<div class="text-center py-10 text-slate-300 font-bold text-xs">לא הוגדרו קטגוריות מתוכננות</div>'; return; }
             activeCats.forEach(cat => {
                 const totalBudget = safeParseFloat(cat.value), taggedTxs = state.transactions.filter(t => t.tag === cat.name);
                 const spent = taggedTxs.reduce((s, t) => s + safeParseFloat(t.amount), 0), remaining = totalBudget - spent, percent = Math.min(100, (spent / totalBudget) * 100);
