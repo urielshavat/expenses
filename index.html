@@ -246,13 +246,27 @@
                 <div id="fixedList" class="space-y-1.5"></div>
                 <button id="showZeroFixedBtn" onclick="window.toggleZeroItems('fixed')" class="show-zero-btn hidden">הצג סעיפים ללא תקציב</button>
             </div>
-            <div class="mb-8 pb-16">
+            <div class="mb-8">
                 <div class="flex justify-between items-center py-2">
                     <h3 class="text-slate-800 font-bold text-xs flex items-center gap-1.5"><i class="fa-solid fa-calendar text-amber-500"></i>הוצאות מתוכננות</h3>
                     <button onclick="window.initNewCategory(4)" class="btn-add-cat"><i class="fa-solid fa-plus"></i></button>
                 </div>
                 <div id="annualList" class="space-y-1.5"></div>
                 <button id="showZeroAnnualBtn" onclick="window.toggleZeroItems('annual')" class="show-zero-btn hidden">הצג סעיפים ללא תקציב</button>
+            </div>
+
+            <!-- Useful Information Section -->
+            <div class="mb-8 pb-16">
+                <h3 class="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2 px-1">כלים פיננסיים</h3>
+                <div class="card overflow-hidden">
+                    <button onclick="window.toggleUsefulInfo('calcInfo')" class="w-full flex justify-between items-center p-4 bg-white text-right active:bg-slate-50 transition-colors">
+                        <span class="text-xs font-bold text-slate-800">כמה צריך לשים בצד?</span>
+                        <i id="calcInfoIcon" class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform duration-200"></i>
+                    </button>
+                    <div id="calcInfoContent" class="hidden bg-slate-50 p-4 text-xs text-slate-600 border-t border-slate-100 leading-relaxed">
+                        בעזרת המחשבון הזה תוכלו לחשב כמה צריך לשים בצד כדי שיהיה מספיק לאירועים שלכם  <a href="https://family-savings.lovable.app/" target="_blank" class="text-blue-600 underline font-bold">Family Savings</a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1105,6 +1119,15 @@
                 const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?${new URLSearchParams({ action: 'updateMultiple', data: JSON.stringify(Object.entries(state.dirtyBudgetItems).map(([cell, value]) => ({ cell, value }))) })}`);
                 const data = await res.json(); state.isDirty = true; state.dirtyBudgetItems = {}; renderBudget(data); window.showToast('עודכן', 'check');
             } finally { setLoading(false, true); }
+        };
+
+        window.toggleUsefulInfo = function(id) {
+            const el = document.getElementById(id + 'Content');
+            const icon = document.getElementById(id + 'Icon');
+            if(el) {
+                el.classList.toggle('hidden');
+                if(icon) icon.style.transform = el.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+            }
         };
 
         function setLoading(v, syncIcon = false, modalIcon = false) { 
