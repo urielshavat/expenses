@@ -169,7 +169,7 @@
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col items-center p-4">
+<body class="min-h-screen flex flex-col items-center p-4 large-text">
     <div class="w-full max-w-md bg-transparent flex flex-col min-h-screen pb-32" id="appRoot">
         <div class="flex justify-between items-center mb-4 px-1">
             <h1 id="pageTitle" class="text-xl font-bold text-slate-800 tracking-tight">הוצאות שוטפות</h1>
@@ -464,13 +464,6 @@
                             <span class="slider"></span>
                         </label>
                     </div>
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-700 text-sm">מצב גופן מוגדל</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="fontScaleToggle" onchange="window.toggleLargeText()">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
                 </div>
                 <button id="saveSettingsBtn" onclick="window.saveSettings()" class="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl text-xs mt-4">שמור הגדרות</button>
             </div>
@@ -589,7 +582,6 @@
             currentView: 'main', isLoading: false, pendingActionRow: null, pendingAddType: 0, expandedAnnualCategories: new Set(), dirtyBudgetItems: {}, 
             isDirty: true, showAnnualInMain: false, 
             isPrivacyMode: localStorage.getItem('isPrivacyMode') === 'true', 
-            isLargeText: localStorage.getItem('isLargeText') === 'true',
             showZeroSections: { income: false, fixed: false, annual: false }, plannedLoaded: false,
             displayedTransactionsCount: 30,
             collapsedGroups: JSON.parse(localStorage.getItem('collapsedGroups')) || {}
@@ -621,13 +613,6 @@
         window.togglePrivacyMode = function() {
             state.isPrivacyMode = !state.isPrivacyMode; localStorage.setItem('isPrivacyMode', state.isPrivacyMode);
             if (state.currentView === 'budget') renderBudget(); else if (state.currentView === 'annual') renderAnnualView(); else render();
-        };
-
-        window.toggleLargeText = function() {
-            state.isLargeText = !state.isLargeText; 
-            localStorage.setItem('isLargeText', state.isLargeText);
-            document.body.classList.toggle('large-text', state.isLargeText);
-            if (state.currentView === 'budget') renderBudget();
         };
 
         window.sendTelemetry = async function() {
@@ -711,7 +696,6 @@
             if (o.classList.contains('hidden')) { 
                 const skInp = document.getElementById('sheetKeyInput'); if (skInp) skInp.value = state.sheetKey; 
                 const pt = document.getElementById('privacyToggle'); if (pt) pt.checked = state.isPrivacyMode;
-                const fst = document.getElementById('fontScaleToggle'); if (fst) fst.checked = state.isLargeText;
                 o.classList.remove('hidden'); setTimeout(() => o.classList.add('opacity-100'), 10); 
             } else { o.classList.remove('opacity-100'); setTimeout(() => o.classList.add('hidden'), 300); } 
         };
@@ -906,9 +890,9 @@
             
             let message = '';
             if (state.balance < 0) {
-                message = `על מנת להתאים את התקציב היומי להוצאות השוטפות, מומלץ לצמצם את ההוצאות הקבועות בכ-<b>₪${recAmountDisplay}</b>`;
+                message = `אתם צוברים מינוס של <b>₪${recAmountDisplay}</b> בממוצע כל חודש, ממולץ לצמצם סכום דומה מההוצאות הקבועות על מנת להפנות אותו להוצאות השוטפות.`;
             } else {
-                message = `התקציב היומי גבוה מן הנדרש, מומלץ להפקיד כ-<b>₪${recAmountDisplay}</b> לחסכון ולתעד אותו בהוצאות קבועות.`;
+                message = `התקציב היומי גבוה מן הנדרש, בממוצע כל חודש אתם צוברים יתרה של <b>₪${recAmountDisplay}</b>  מומלץ להפקיד את הסכום הזה לחסכון כהוצאה קבועה.`;
             }
 
             const content = document.getElementById('recommendationContent'), overlay = document.getElementById('recommendationOverlay');
@@ -1306,7 +1290,8 @@
             const now = new Date(), dateStr = now.toLocaleDateString('en-GB'), timeStr = now.toLocaleTimeString('he-IL'), baseUrl = `https://script.google.com/macros/s/${state.sheetKey}/exec`;
             try {
                 let catTitle = diff > 0 ? 'השלמה לתקציב' : 'ביטול חריגה', dailyTitle = diff > 0 ? `הכנסה מיתרה ב${name}` : `הוצאה עקב חריגה ב${name}`;
-                await fetchGAS(`${baseUrl}?${new URLSearchParams({ action: 'add', amount: diff.toString(), name: catTitle, time: timeStr, date: dateStr, tag: name })}`);
+                // Tag with =CellRef formula instead of name string
+                await fetchGAS(`${baseUrl}?${new URLSearchParams({ action: 'add', amount: diff.toString(), name: catTitle, time: timeStr, date: dateStr, tag: '=' + cellRef })}`);
                 const res = await fetchGAS(`${baseUrl}?${new URLSearchParams({ 
                     action: 'addAndFetch', 
                     amount: (diff > 0 ? -diff : Math.abs(diff)).toString(), 
@@ -1451,15 +1436,23 @@
             const startDate = new Date(startParts[2], startParts[1] - 1, startParts[0]);
             const today = new Date(); today.setHours(0,0,0,0);
             const timeDiff = today.getTime() - startDate.getTime();
-            const daysElapsed = Math.max(0, Math.floor(timeDiff / (1000 * 3600 * 24)));
-            const balancingAmount = dailyDiff * daysElapsed;
-            const explNums = document.getElementById('explNumbers');
-            explNums.innerHTML = `התקציב ישתנה ב-₪${Math.round(formatDisplayAmount(diff)).toLocaleString()}. 
-                זהו שינוי של <b>₪${formatDisplayAmount(dailyDiff).toFixed(1)}</b> ליום. 
-                מכיוון שעברו <b>${daysElapsed} ימים</b> מתחילת החודש, תיווצר הוצאת איזון בסך <b>₪${Math.round(formatDisplayAmount(balancingAmount)).toLocaleString()}</b> כדי לשמור על המאזן היומי שלך מעודכן מהיום.`;
-            const o = document.getElementById('retroUpdateOverlay');
-            o.classList.remove('hidden'); setTimeout(() => o.classList.add('opacity-100'), 10);
-            state.pendingG4 = { finalG4: actualRequestedMonthly, balancingAmount };
+            const daysPassed = Math.max(1, Math.floor(timeDiff / (1000 * 3600 * 24)));
+            const factor = daysPassed / 30;
+            const recAmountActual = Math.abs(state.balance / factor);
+            const recAmountDisplay = Math.round(formatDisplayAmount(recAmountActual)).toLocaleString();
+            
+            let message = '';
+            if (state.balance < 0) {
+                message = `אתם צוברים מינוס של <b>₪${recAmountDisplay}</b> בממוצע כל חודש, ממולץ לצמצם סכום דומה מההוצאות הקבועות על מנת להפנות אותו להוצאות השוטפות.`;
+            } else {
+                message = `התקציב היומי גבוה מן הנדרש, בממוצע כל חודש אתם צוברים יתרה של <b>₪${recAmountDisplay}</b>  מומלץ להפקיד את הסכום הזה לחסכון כהוצאה קבועה.`;
+            }
+
+            const content = document.getElementById('recommendationContent'), overlay = document.getElementById('recommendationOverlay');
+            if (content && overlay) {
+                content.innerHTML = message;
+                overlay.classList.remove('hidden'); setTimeout(() => overlay.classList.add('opacity-100'), 10);
+            }
         };
 
         window.updateG4Budget = async function(mode) {
@@ -1528,7 +1521,6 @@
                 state.sheetKey = cleanId;
                 localStorage.setItem('google_sheet_key', cleanId);
             }
-            if (state.isLargeText) document.body.classList.add('large-text');
             window.fetchData(); 
         });
         render();
