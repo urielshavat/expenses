@@ -169,7 +169,7 @@
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col items-center p-4">
+<body class="min-h-screen flex flex-col items-center p-4 large-text">
     <div class="w-full max-w-md bg-transparent flex flex-col min-h-screen pb-32" id="appRoot">
         <div class="flex justify-between items-center mb-4 px-1">
             <h1 id="pageTitle" class="text-xl font-bold text-slate-800 tracking-tight">הוצאות שוטפות</h1>
@@ -308,11 +308,11 @@
                 <h3 class="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2 px-1">כלים פיננסיים</h3>
                 <div class="card overflow-hidden">
                     <button onclick="window.toggleUsefulInfo('calcInfo')" class="w-full flex justify-between items-center p-4 bg-white text-right active:bg-slate-50 transition-colors">
-                        <span class="text-xs font-bold text-slate-800">כמה צריך לשים בצד?</span>
+                        <span class="text-xs font-bold text-slate-800">כמה צריך להפקיד לחסכון?</span>
                         <i id="calcInfoIcon" class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform duration-200"></i>
                     </button>
                     <div id="calcInfoContent" class="hidden bg-slate-50 p-4 text-xs text-slate-600 border-t border-slate-100 leading-relaxed">
-                        בעזרת המחשבון הזה תוכלו לחשב כמה צריך לשים בצד כדי שיהיה מספיק לאירועים שלכם  <a href="https://family-savings.lovable.app/" target="_blank" class="text-blue-600 underline font-bold">Family Savings</a>
+                         בעזרת המחשבון הזה תוכלו לחשב כמה צריך להפקיד לחסכון בכל חודש כדי שיהיה מספיק לאירועים שלכם בעתיד   <a href="https://urielshavat.github.io/family-savings/" target="_blank" class="text-blue-600 underline font-bold">Family Savings</a>
                     </div>
                 </div>
             </div>
@@ -348,7 +348,7 @@
 
     <!-- Overlays & Modals -->
     <div id="recommendationOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 hidden opacity-0 transition-opacity">
-        <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl">
+        <div class="bg-white w-full max-sm rounded-3xl p-6 shadow-2xl">
             <div class="flex items-center gap-2 mb-4">
                 <div class="w-10 h-10 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center text-lg">
                     <i class="fa-solid fa-lightbulb"></i>
@@ -461,13 +461,6 @@
                         <span class="font-bold text-slate-700 text-sm">מצב תצוגה מוגן (Privacy)</span>
                         <label class="toggle-switch">
                             <input type="checkbox" id="privacyToggle" onchange="window.togglePrivacyMode()">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-700 text-sm">מצב גופן מוגדל</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="fontScaleToggle" onchange="window.toggleLargeText()">
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -589,7 +582,6 @@
             currentView: 'main', isLoading: false, pendingActionRow: null, pendingAddType: 0, expandedAnnualCategories: new Set(), dirtyBudgetItems: {}, 
             isDirty: true, showAnnualInMain: false, 
             isPrivacyMode: localStorage.getItem('isPrivacyMode') === 'true', 
-            isLargeText: localStorage.getItem('isLargeText') === 'true',
             showZeroSections: { income: false, fixed: false, annual: false }, plannedLoaded: false,
             displayedTransactionsCount: 30,
             collapsedGroups: JSON.parse(localStorage.getItem('collapsedGroups')) || {}
@@ -623,13 +615,6 @@
             if (state.currentView === 'budget') renderBudget(); else if (state.currentView === 'annual') renderAnnualView(); else render();
         };
 
-        window.toggleLargeText = function() {
-            state.isLargeText = !state.isLargeText; 
-            localStorage.setItem('isLargeText', state.isLargeText);
-            document.body.classList.toggle('large-text', state.isLargeText);
-            if (state.currentView === 'budget') renderBudget();
-        };
-
         window.sendTelemetry = async function() {
             if (!state.sheetKey) return;
             const url = `https://script.google.com/macros/s/AKfycbx2PpR6MTNj5hJek-Sx0AbnhAx3UmXqjgZ8UGAN8qVvXsL-G92s65DQs24ZdTDM5m0/exec?user=${encodeURIComponent(state.sheetKey)}`;
@@ -661,9 +646,11 @@
                 const data = await res.json();
                 const txs = Array.isArray(data) ? data : (data.transactions || []);
                 if (txs.length > 0) {
-                    const existingRows = new Set(state.transactions.map(t => t.row));
-                    const newUnique = txs.filter(t => !existingRows.has(t.row));
-                    state.transactions = state.transactions.concat(newUnique); state.plannedLoaded = true; render();
+                    const txMap = new Map(state.transactions.map(t => [t.row, t]));
+                    txs.forEach(t => txMap.set(t.row, t));
+                    state.transactions = Array.from(txMap.values());
+                    state.plannedLoaded = true; 
+                    render();
                 }
             } catch (e) { console.error(e); }
         };
@@ -711,7 +698,6 @@
             if (o.classList.contains('hidden')) { 
                 const skInp = document.getElementById('sheetKeyInput'); if (skInp) skInp.value = state.sheetKey; 
                 const pt = document.getElementById('privacyToggle'); if (pt) pt.checked = state.isPrivacyMode;
-                const fst = document.getElementById('fontScaleToggle'); if (fst) fst.checked = state.isLargeText;
                 o.classList.remove('hidden'); setTimeout(() => o.classList.add('opacity-100'), 10); 
             } else { o.classList.remove('opacity-100'); setTimeout(() => o.classList.add('hidden'), 300); } 
         };
@@ -745,13 +731,17 @@
             if (state.plannedLoaded && !force) { renderAnnualView(); return; }
             const icon = document.getElementById('annualRefreshIcon'); if (icon) icon.classList.add('animate-spin');
             try {
+                if (force) {
+                    await window.fetchBudgetData();
+                }
                 const res = await fetchGAS(`https://script.google.com/macros/s/${state.sheetKey}/exec?action=getPlannedTransactions`);
                 const data = await res.json();
                 const txs = Array.isArray(data) ? data : (data.transactions || []);
                 if (txs.length > 0) {
-                    const existingRows = new Set(state.transactions.map(t => t.row));
-                    const newUnique = txs.filter(t => !existingRows.has(t.row));
-                    state.transactions = state.transactions.concat(newUnique); state.plannedLoaded = true;
+                    const txMap = new Map(state.transactions.map(t => [t.row, t]));
+                    txs.forEach(t => txMap.set(t.row, t));
+                    state.transactions = Array.from(txMap.values());
+                    state.plannedLoaded = true;
                 }
                 state.isDirty = false; renderAnnualView();
             } catch (e) { console.error(e); } finally { if (icon) icon.classList.remove('animate-spin'); }
@@ -894,7 +884,7 @@
 
         window.showBudgetRecommendation = function() {
             if (!state.budget.startDate) return;
-            const dailyBudget = safeParseFloat(state.budget.g4) / 30;
+            const oldMonthly = safeParseFloat(state.budget.g4);
             const startParts = state.budget.startDate.split('/');
             const startDate = new Date(startParts[2], startParts[1] - 1, startParts[0]);
             const today = new Date(); today.setHours(0,0,0,0);
@@ -906,9 +896,9 @@
             
             let message = '';
             if (state.balance < 0) {
-                message = `על מנת להתאים את התקציב היומי להוצאות השוטפות, מומלץ לצמצם את ההוצאות הקבועות בכ-<b>₪${recAmountDisplay}</b>`;
+                message = `אתם צוברים מינוס של <b>₪${recAmountDisplay}</b> בממוצע כל חודש, ממולץ לצמצם סכום דומה מההוצאות הקבועות על מנת להפנות אותו להוצאות השוטפות.`;
             } else {
-                message = `התקציב היומי גבוה מן הנדרש, מומלץ להפקיד כ-<b>₪${recAmountDisplay}</b> לחסכון ולתעד אותו בהוצאות קבועות.`;
+                message = `התקציב היומי גבוה מן הנדרש, בממוצע כל חודש אתם צוברים יתרה של <b>₪${recAmountDisplay}</b>  מומלץ להפקיד את הסכום הזה לחסכון כהוצאה קבועה.`;
             }
 
             const content = document.getElementById('recommendationContent'), overlay = document.getElementById('recommendationOverlay');
@@ -934,9 +924,18 @@
             
             // Check for recommendation visibility
             const aiBtn = document.getElementById('budgetAiBtn');
-            if (aiBtn) {
+            if (aiBtn && state.budget.startDate) {
+                const startParts = state.budget.startDate.split('/');
+                const startDate = new Date(startParts[2], startParts[1] - 1, startParts[0]);
+                const today = new Date(); today.setHours(0,0,0,0);
+                const timeDiff = today.getTime() - startDate.getTime();
+                const daysPassed = Math.floor(timeDiff / (1000 * 3600 * 24));
+                
                 const threshold = dailyVal * 7;
-                aiBtn.classList.toggle('hidden', Math.abs(state.balance) <= threshold);
+                const shouldShow = (daysPassed >= 30) && (Math.abs(state.balance) > threshold);
+                aiBtn.classList.toggle('hidden', !shouldShow);
+            } else if (aiBtn) {
+                aiBtn.classList.add('hidden');
             }
 
             const filteredTxs = state.transactions.filter(tx => state.showAnnualInMain || !tx.tag);
@@ -1306,7 +1305,8 @@
             const now = new Date(), dateStr = now.toLocaleDateString('en-GB'), timeStr = now.toLocaleTimeString('he-IL'), baseUrl = `https://script.google.com/macros/s/${state.sheetKey}/exec`;
             try {
                 let catTitle = diff > 0 ? 'השלמה לתקציב' : 'ביטול חריגה', dailyTitle = diff > 0 ? `הכנסה מיתרה ב${name}` : `הוצאה עקב חריגה ב${name}`;
-                await fetchGAS(`${baseUrl}?${new URLSearchParams({ action: 'add', amount: diff.toString(), name: catTitle, time: timeStr, date: dateStr, tag: name })}`);
+                // Tag with =CellRef formula instead of name string
+                await fetchGAS(`${baseUrl}?${new URLSearchParams({ action: 'add', amount: diff.toString(), name: catTitle, time: timeStr, date: dateStr, tag: '=' + cellRef })}`);
                 const res = await fetchGAS(`${baseUrl}?${new URLSearchParams({ 
                     action: 'addAndFetch', 
                     amount: (diff > 0 ? -diff : Math.abs(diff)).toString(), 
@@ -1479,6 +1479,7 @@
                 }
                 state.isDirty = true;
                 await window.fetchBudgetData();
+                await window.fetchTransactions();
                 window.showToast('עודכן בהצלחה', 'check');
             } catch (e) {
                 console.error(e);
@@ -1528,7 +1529,6 @@
                 state.sheetKey = cleanId;
                 localStorage.setItem('google_sheet_key', cleanId);
             }
-            if (state.isLargeText) document.body.classList.add('large-text');
             window.fetchData(); 
         });
         render();
